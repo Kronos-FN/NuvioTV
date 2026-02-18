@@ -1,1 +1,18 @@
-plugins {\n    kotlin("multiplatform")\n}\n\nkotlin {\n    jvm()\n    sourceSets {\n        val jvmMain by getting {\n            dependencies {\n                implementation("org.jetbrains.compose.compose-runtime")\n                implementation("org.jetbrains.compose.material")\n                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2")\n            }\n        }\n    }\n}
+plugins {
+    kotlin("multiplatform") version "1.6.10"
+}
+
+kotlin {
+    jvm { }
+    sourceSets {
+        val jvmMain by getting {
+            dependencies {
+                implementation("org.jetbrains.compose.desktop:desktop:1.0.0")
+            }
+        }
+    }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class) {
+    kotlinOptions.jvmTarget = "11"
+}
