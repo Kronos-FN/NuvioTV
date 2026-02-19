@@ -29,6 +29,7 @@ private val NavItemIconShape = RoundedCornerShape(10.dp)
 enum class NavigationItem(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Default.Home),
     Search("Search", Icons.Default.Search),
+    Library("Library", Icons.Default.Favorite),
     Addons("Addons", Icons.Default.Add),
     Settings("Settings", Icons.Default.Settings)
 }
