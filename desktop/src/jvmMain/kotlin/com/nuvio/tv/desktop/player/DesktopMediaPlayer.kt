@@ -1,6 +1,9 @@
 package com.nuvio.tv.desktop.player
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
@@ -30,6 +33,10 @@ class DesktopMediaPlayer {
         return DesktopPlaybackResult(launchedExternally = false)
     }
 
+    fun stop() {
+        mediaPlayerComponent.mediaPlayer().controls().stop()
+    }
+
     @Composable
     fun VideoSurface(modifier: Modifier = Modifier) {
         if (!isEmbeddedPlaybackAvailable) {
@@ -37,6 +44,14 @@ class DesktopMediaPlayer {
         }
 
         val component = remember { mediaPlayerComponent }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                // Ensure playback is stopped when the surface is disposed
+                component.mediaPlayer().controls().stop()
+            }
+        }
+
         SwingPanel(
             factory = { component },
             modifier = modifier

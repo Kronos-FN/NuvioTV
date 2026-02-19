@@ -199,7 +199,10 @@ fun MainContent(
                     is DesktopScreen.Player -> {
                         PlayerScreen(
                             title = screen.title,
-                            onBackClick = { navigateBack() },
+                            onBackClick = {
+                                mediaPlayer.stop()
+                                navigateBack()
+                            },
                             videoSurface = {
                                 mediaPlayer.VideoSurface(modifier = Modifier.fillMaxSize())
                             },
