@@ -52,12 +52,11 @@ compose.desktop {
 // Task to copy the built EXE to the root folder for easy finding
 tasks.register<Copy>("copyExeToRoot") {
     // Ensuring it runs after the packaging task
-    dependsOn("packageExe") 
-    
-    val buildDir = layout.buildDirectory.get().asFile
-    from(File(buildDir, "compose/binaries/main/exe"))
+    dependsOn("packageExe")
+
+    from(layout.buildDirectory.dir("compose/binaries/main/exe"))
     include("*.exe")
-    into(rootProject.projectDir)
+    into(rootProject.layout.projectDirectory)
     
     // Rename to a consistent name
     rename { "NuvioTV_Installer.exe" }

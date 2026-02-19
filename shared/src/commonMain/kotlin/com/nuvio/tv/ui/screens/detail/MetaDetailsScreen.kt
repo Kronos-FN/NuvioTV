@@ -44,9 +44,7 @@ fun MetaDetailsScreen(
             }
             uiState.error != null -> {
                 EmptyScreenState(
-                    message = uiState.error ?: "An error occurred",
-                    actionLabel = "Retry",
-                    onActionClick = { viewModel.onEvent(MetaDetailsEvent.OnRetry) }
+                    title = uiState.error ?: "An error occurred"
                 )
             }
             uiState.meta != null -> {

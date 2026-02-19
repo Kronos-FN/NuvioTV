@@ -229,7 +229,7 @@ internal fun SettingsToggleRow(
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = NuvioColors.Accent,
+                checkedTrackColor = NuvioColors.Secondary,
                 uncheckedThumbColor = Color.White,
                 uncheckedTrackColor = Color.Gray
             )
@@ -268,7 +268,7 @@ internal fun SettingsSliderRow(
             Text(
                 text = valueLabel(value),
                 style = MaterialTheme.typography.bodyMedium,
-                color = NuvioColors.Accent,
+                color = NuvioColors.Secondary,
                 modifier = Modifier.padding(start = 12.dp)
             )
         }
@@ -278,8 +278,8 @@ internal fun SettingsSliderRow(
             valueRange = valueRange,
             steps = steps,
             colors = SliderDefaults.colors(
-                thumbColor = NuvioColors.Accent,
-                activeTrackColor = NuvioColors.Accent,
+                thumbColor = NuvioColors.Secondary,
+                activeTrackColor = NuvioColors.Secondary,
                 inactiveTrackColor = Color.Gray.copy(alpha = 0.3f)
             )
         )
@@ -296,9 +296,9 @@ internal fun SettingsChoiceChip(
     Surface(
         onClick = onClick,
         modifier = modifier,
-        color = if (selected) NuvioColors.Accent else NuvioColors.BackgroundElevated,
+        color = if (selected) NuvioColors.Secondary else NuvioColors.BackgroundElevated,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, if (selected) NuvioColors.Accent else NuvioColors.Border)
+        border = BorderStroke(1.dp, if (selected) NuvioColors.Secondary else NuvioColors.Border)
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -326,7 +326,7 @@ internal fun SettingsButton(
         modifier = modifier,
         enabled = enabled,
         colors = ButtonDefaults.buttonColors(
-            containerColor = NuvioColors.Accent,
+            containerColor = NuvioColors.Secondary,
             contentColor = Color.White,
             disabledContainerColor = Color.Gray,
             disabledContentColor = Color.White.copy(alpha = 0.6f)

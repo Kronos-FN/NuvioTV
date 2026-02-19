@@ -58,7 +58,7 @@ private fun parsePosterShape(shape: String?): PosterShape {
     return when (shape?.lowercase()) {
         "square" -> PosterShape.SQUARE
         "landscape" -> PosterShape.LANDSCAPE
-        else -> PosterShape.PORTRAIT
+        else -> PosterShape.POSTER
     }
 }
 

@@ -28,7 +28,7 @@ actual class JsonFileStorage actual constructor() : FileBasedPreferences {
         return File(storageDir, "$key.json")
     }
     
-    override suspend fun <T> read(key: String, serializer: KSerializer<T>): T? = withContext(Dispatchers.IO) {
+    actual override suspend fun <T> read(key: String, serializer: KSerializer<T>): T? = withContext(Dispatchers.IO) {
         try {
             val file = getFile(key)
             if (!file.exists()) return@withContext null
@@ -41,7 +41,7 @@ actual class JsonFileStorage actual constructor() : FileBasedPreferences {
         }
     }
     
-    override suspend fun <T> write(key: String, value: T, serializer: KSerializer<T>) = withContext(Dispatchers.IO) {
+    actual override suspend fun <T> write(key: String, value: T, serializer: KSerializer<T>) = withContext(Dispatchers.IO) {
         try {
             val file = getFile(key)
             val jsonString = json.encodeToString(serializer, value)
@@ -51,7 +51,7 @@ actual class JsonFileStorage actual constructor() : FileBasedPreferences {
         }
     }
     
-    override suspend fun delete(key: String) = withContext(Dispatchers.IO) {
+    actual override suspend fun delete(key: String) = withContext(Dispatchers.IO) {
         try {
             val file = getFile(key)
             if (file.exists()) {
@@ -62,7 +62,7 @@ actual class JsonFileStorage actual constructor() : FileBasedPreferences {
         }
     }
     
-    override suspend fun clear() = withContext(Dispatchers.IO) {
+    actual override suspend fun clear(): Unit = withContext(Dispatchers.IO) {
         try {
             storageDir.listFiles()?.forEach { file ->
                 if (file.extension == "json") {
@@ -74,7 +74,7 @@ actual class JsonFileStorage actual constructor() : FileBasedPreferences {
         }
     }
     
-    override suspend fun contains(key: String): Boolean = withContext(Dispatchers.IO) {
+    actual override suspend fun contains(key: String): Boolean = withContext(Dispatchers.IO) {
         getFile(key).exists()
     }
 }
