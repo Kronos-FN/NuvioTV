@@ -18,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.nuvio.tv.data.preferences.*
 import com.nuvio.tv.domain.model.AppTheme
 import com.nuvio.tv.ui.theme.NuvioColors
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.theme.ThemeColors
+import com.nuvio.tv.ui.viewmodel.*
 
 internal enum class SettingsCategory {
     ACCOUNT, APPEARANCE, LAYOUT, PLUGINS, INTEGRATION, PLAYBACK, TRAKT, ABOUT
@@ -33,6 +35,17 @@ fun SettingsScreen(
     onThemeChange: (AppTheme) -> Unit
 ) {
     var selectedCategory by remember { mutableStateOf(SettingsCategory.APPEARANCE) }
+
+    // Create stores and ViewModels
+    val layoutStore = remember { LayoutPreferencesStore() }
+    val playerStore = remember { PlayerPreferencesStore() }
+    val traktStore = remember { TraktPreferencesStore() }
+    val integrationStore = remember { IntegrationPreferencesStore() }
+    
+    val layoutViewModel = remember { LayoutSettingsViewModel(layoutStore) }
+    val playbackViewModel = remember { PlaybackSettingsViewModel(playerStore) }
+    val traktViewModel = remember { TraktViewModel(traktStore) }
+    val integrationViewModel = remember { IntegrationSettingsViewModel(integrationStore) }
 
     Box(
         modifier = Modifier
@@ -70,8 +83,11 @@ fun SettingsScreen(
                     ) { category ->
                         when (category) {
                             SettingsCategory.APPEARANCE -> AppearanceSettings(currentTheme, onThemeChange)
-                            SettingsCategory.INTEGRATION -> IntegrationSettings()
-                            SettingsCategory.ABOUT -> AboutSettings()
+                            SettingsCategory.LAYOUT -> LayoutSettingsPanel(layoutViewModel)
+                            SettingsCategory.PLAYBACK -> PlaybackSettingsPanel(playbackViewModel)
+                            SettingsCategory.TRAKT -> TraktSettingsPanel(traktViewModel)
+                            SettingsCategory.INTEGRATION -> IntegrationSettingsPanel(integrationViewModel)
+                            SettingsCategory.ABOUT -> AboutSettingsPanel()
                             else -> PlaceholderDetail(category.name.lowercase().replaceFirstChar { it.uppercase() })
                         }
                     }
@@ -99,29 +115,7 @@ private fun AppearanceSettings(currentTheme: AppTheme, onThemeChange: (AppTheme)
     }
 }
 
-@Composable
-private fun IntegrationSettings() {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        SettingsDetailHeader("Integration", "External Debrid Services")
-        SettingsGroupCard(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            SettingsActionRow("Real-Debrid", "Connect your account for high-speed streaming", {})
-            SettingsActionRow("AllDebrid", "Coming soon", {})
-        }
-    }
-}
 
-@Composable
-private fun AboutSettings() {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        SettingsDetailHeader("About", "Version and policies")
-        SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
-            Text("Nuvio Media Hub", style = MaterialTheme.typography.titleLarge, color = Color.White)
-            Text("Version: 0.3.6 (Desktop)", color = Color.Gray)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("A multiplatform media hub for all your needs.", color = Color.White)
-        }
-    }
-}
 
 @Composable
 private fun PlaceholderDetail(title: String) {
