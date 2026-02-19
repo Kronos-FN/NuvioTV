@@ -27,6 +27,7 @@ sealed class DesktopScreen {
     data class Player(
         val streamUrl: String,
         val title: String,
-        val headers: Map<String, String>? = null
+        val headers: Map<String, String>? = null,
+        val externalPlaybackNotice: String? = null
     ) : DesktopScreen()
 }

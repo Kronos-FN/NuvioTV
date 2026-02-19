@@ -20,6 +20,7 @@ fun PlayerScreen(
     title: String,
     onBackClick: () -> Unit,
     videoSurface: @Composable () -> Unit,
+    externalPlaybackNotice: String? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -63,6 +64,23 @@ fun PlayerScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                     modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        externalPlaybackNotice?.let { notice ->
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
+                color = Color.Black.copy(alpha = 0.75f),
+                tonalElevation = 2.dp
+            ) {
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                 )
             }
         }
