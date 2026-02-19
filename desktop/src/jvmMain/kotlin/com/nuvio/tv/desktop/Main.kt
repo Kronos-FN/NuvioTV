@@ -180,8 +180,15 @@ fun MainContent(
                                 episode = screen.episode
                             ).also {
                                 it.onNavigateToPlayer = { streamUrl, title, headers ->
-                                    mediaPlayer.play(streamUrl)
-                                    navigate(DesktopScreen.Player(streamUrl, title, headers))
+                                    val playbackResult = mediaPlayer.play(streamUrl)
+                                    navigate(
+                                        DesktopScreen.Player(
+                                            streamUrl = streamUrl,
+                                            title = title,
+                                            headers = headers,
+                                            externalPlaybackNotice = playbackResult.message
+                                        )
+                                    )
                                 }
                                 it.onNavigateBack = { navigateBack() }
                             }
@@ -195,7 +202,8 @@ fun MainContent(
                             onBackClick = { navigateBack() },
                             videoSurface = {
                                 mediaPlayer.VideoSurface(modifier = Modifier.fillMaxSize())
-                            }
+                            },
+                            externalPlaybackNotice = screen.externalPlaybackNotice
                         )
                     }
                 }
