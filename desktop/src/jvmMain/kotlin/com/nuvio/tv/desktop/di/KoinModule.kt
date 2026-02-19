@@ -1,11 +1,48 @@
-import org.koin.core.context.loadKoinModules
+package com.nuvio.tv.desktop.di
+
+import com.nuvio.tv.core.network.createHttpClient
+import com.nuvio.tv.data.remote.api.AddonApi
+import com.nuvio.tv.data.repository.AddonRepositoryImpl
+import com.nuvio.tv.data.repository.CatalogRepositoryImpl
+import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.domain.repository.CatalogRepository
+import com.nuvio.tv.ui.screens.home.HomeViewModel
+import com.nuvio.tv.ui.screens.search.SearchViewModel
+import org.koin.core.context.startKoin
 import org.koin.dsl.module
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 val koinModule = module {
-    // Define your dependencies here.
-    single { SomeDependency() }
+    // Network
+    single { createHttpClient() }
+    single { AddonApi(get()) }
+
+    // Repositories
+    single<AddonRepository> { AddonRepositoryImpl(get()) }
+    single<CatalogRepository> { CatalogRepositoryImpl(get()) }
+
+    // ViewModels
+    factory { 
+        HomeViewModel(
+            addonRepository = get(),
+            catalogRepository = get(),
+            coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+        ) 
+    }
+    factory {
+        SearchViewModel(
+            addonRepository = get(),
+            catalogRepository = get(),
+            coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+        )
+    }
 }
 
-fun initializeKoin() {
-    loadKoinModules(koinModule)
+fun initKoin() {
+    startKoin {
+        printLogger() 
+        modules(koinModule)
+    }
 }
