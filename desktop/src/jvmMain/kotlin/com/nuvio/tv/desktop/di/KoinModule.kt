@@ -4,8 +4,12 @@ import com.nuvio.tv.core.network.createHttpClient
 import com.nuvio.tv.data.remote.api.AddonApi
 import com.nuvio.tv.data.repository.AddonRepositoryImpl
 import com.nuvio.tv.data.repository.CatalogRepositoryImpl
+import com.nuvio.tv.data.repository.MetaRepositoryImpl
+import com.nuvio.tv.data.repository.StreamRepositoryImpl
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.CatalogRepository
+import com.nuvio.tv.domain.repository.MetaRepository
+import com.nuvio.tv.domain.repository.StreamRepository
 import com.nuvio.tv.ui.screens.home.HomeViewModel
 import com.nuvio.tv.ui.screens.search.SearchViewModel
 import org.koin.core.context.startKoin
@@ -22,6 +26,8 @@ val koinModule = module {
     // Repositories
     single<AddonRepository> { AddonRepositoryImpl(get()) }
     single<CatalogRepository> { CatalogRepositoryImpl(get()) }
+    single<MetaRepository> { MetaRepositoryImpl(get(), get()) }
+    single<StreamRepository> { StreamRepositoryImpl(get(), get()) }
 
     // ViewModels
     factory { 
