@@ -20,12 +20,25 @@ internal fun TraktSettingsPanel(
     val preferences by viewModel.preferences.collectAsState()
     val connectionMode by viewModel.connectionMode.collectAsState()
     val deviceCode by viewModel.deviceCode.collectAsState()
+    val isPolling by viewModel.isPolling.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
 
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         SettingsDetailHeader("Trakt", "Connect your Trakt account for syncing and tracking")
+        
+        // Error display
+        error?.let { errorMessage ->
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = androidx.compose.ui.graphics.Color.Red,
+                modifier = Modifier.padding(horizontal = 18.dp)
+            )
+        }
         
         SettingsGroupCard(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (connectionMode) {
@@ -34,10 +47,15 @@ internal fun TraktSettingsPanel(
                 )
                 TraktConnectionMode.AWAITING_APPROVAL -> TraktAwaitingApprovalState(
                     deviceCode = deviceCode,
-                    onCancel = { viewModel.disconnect() }
+                    isPolling = isPolling,
+                    onCancel = { 
+                        viewModel.stopPolling()
+                        viewModel.disconnect() 
+                    }
                 )
                 TraktConnectionMode.CONNECTED -> TraktConnectedState(
                     preferences = preferences,
+                    userProfile = userProfile,
                     viewModel = viewModel,
                     onDisconnect = { viewModel.disconnect() }
                 )
@@ -96,6 +114,7 @@ private fun TraktDisconnectedState(
 @Composable
 private fun TraktAwaitingApprovalState(
     deviceCode: com.nuvio.tv.domain.model.TraktDeviceCode?,
+    isPolling: Boolean,
     onCancel: () -> Unit
 ) {
     Column(
@@ -142,11 +161,22 @@ private fun TraktAwaitingApprovalState(
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        Text(
-            text = "Waiting for authorization...",
-            style = MaterialTheme.typography.bodySmall,
-            color = NuvioColors.TextSecondary
-        )
+        if (isPolling) {
+            androidx.compose.material3.CircularProgressIndicator(
+                color = NuvioColors.Accent
+            )
+            Text(
+                text = "Waiting for authorization...",
+                style = MaterialTheme.typography.bodySmall,
+                color = NuvioColors.TextSecondary
+            )
+        } else {
+            Text(
+                text = "Polling stopped",
+                style = MaterialTheme.typography.bodySmall,
+                color = NuvioColors.TextSecondary
+            )
+        }
         
         Spacer(modifier = Modifier.height(8.dp))
         
@@ -160,6 +190,7 @@ private fun TraktAwaitingApprovalState(
 @Composable
 private fun TraktConnectedState(
     preferences: com.nuvio.tv.domain.model.TraktPreferences,
+    userProfile: String?,
     viewModel: TraktViewModel,
     onDisconnect: () -> Unit
 ) {
@@ -178,7 +209,13 @@ private fun TraktConnectedState(
                     color = NuvioColors.Accent
                 )
                 
-                if (preferences.username.isNotBlank()) {
+                if (userProfile != null) {
+                    Text(
+                        text = "Logged in as: $userProfile",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NuvioColors.TextPrimary
+                    )
+                } else if (preferences.username.isNotBlank()) {
                     Text(
                         text = "Logged in as: ${preferences.username}",
                         style = MaterialTheme.typography.bodyMedium,
