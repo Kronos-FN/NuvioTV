@@ -42,9 +42,28 @@ fun SettingsScreen(
     val traktStore = remember { TraktPreferencesStore() }
     val integrationStore = remember { IntegrationPreferencesStore() }
     
+    // Get TraktApi from Koin for desktop platform
+    val traktApi = try {
+        org.koin.compose.koinInject<com.nuvio.tv.data.remote.api.TraktApi>()
+    } catch (e: Exception) {
+        null // Fallback for platforms without Koin
+    }
+    
     val layoutViewModel = remember { LayoutSettingsViewModel(layoutStore) }
     val playbackViewModel = remember { PlaybackSettingsViewModel(playerStore) }
-    val traktViewModel = remember { TraktViewModel(traktStore) }
+    val traktViewModel = remember(traktApi) { 
+        if (traktApi != null) {
+            TraktViewModel(traktStore, traktApi)
+        } else {
+            // Fallback without API (won't be able to connect to Trakt)
+            TraktViewModel(
+                traktStore,
+                com.nuvio.tv.data.remote.api.TraktApi(
+                    io.ktor.client.HttpClient()
+                )
+            )
+        }
+    }
     val integrationViewModel = remember { IntegrationSettingsViewModel(integrationStore) }
 
     Box(

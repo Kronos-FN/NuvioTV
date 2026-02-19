@@ -3,6 +3,7 @@ package com.nuvio.tv.desktop.di
 import com.nuvio.tv.core.network.createHttpClient
 import com.nuvio.tv.data.persistence.JsonFileStorage
 import com.nuvio.tv.data.remote.api.AddonApi
+import com.nuvio.tv.data.remote.api.TraktApi
 import com.nuvio.tv.data.repository.AddonRepositoryImpl
 import com.nuvio.tv.data.repository.CatalogRepositoryImpl
 import com.nuvio.tv.data.repository.LibraryRepositoryImpl
@@ -30,6 +31,7 @@ val koinModule = module {
     // Network
     single { createHttpClient() }
     single { AddonApi(get()) }
+    single { TraktApi(get()) }
 
     // Repositories
     single<AddonRepository> { AddonRepositoryImpl(get()) }

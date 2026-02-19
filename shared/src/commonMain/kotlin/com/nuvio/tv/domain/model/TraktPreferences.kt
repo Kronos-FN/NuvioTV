@@ -1,5 +1,8 @@
 package com.nuvio.tv.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class TraktPreferences(
     val accessToken: String = "",
     val refreshToken: String = "",
@@ -20,6 +23,7 @@ enum class TraktConnectionMode {
     CONNECTED
 }
 
+@Serializable
 data class TraktDeviceCode(
     val deviceCode: String = "",
     val userCode: String = "",
