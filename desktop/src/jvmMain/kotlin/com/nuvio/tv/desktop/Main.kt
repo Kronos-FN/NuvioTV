@@ -24,6 +24,8 @@ import com.nuvio.tv.ui.screens.detail.MetaDetailsScreen
 import com.nuvio.tv.ui.screens.detail.MetaDetailsViewModel
 import com.nuvio.tv.ui.screens.home.HomeScreen
 import com.nuvio.tv.ui.screens.home.HomeViewModel
+import com.nuvio.tv.ui.screens.library.LibraryScreen
+import com.nuvio.tv.ui.screens.library.LibraryViewModel
 import com.nuvio.tv.ui.screens.player.PlayerScreen
 import com.nuvio.tv.ui.screens.search.SearchScreen
 import com.nuvio.tv.ui.screens.search.SearchViewModel
@@ -72,6 +74,7 @@ fun MainContent(
 ) {
     val homeViewModel: HomeViewModel = koinInject()
     val searchViewModel: SearchViewModel = koinInject()
+    val libraryViewModel: LibraryViewModel = koinInject()
     val metaRepository: MetaRepository = koinInject()
     val streamRepository: StreamRepository = koinInject()
     
@@ -127,13 +130,12 @@ fun MainContent(
                         )
                     }
                     is DesktopScreen.Library -> {
-                        // Placeholder for library screen
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Library (Coming Soon)", style = MaterialTheme.typography.headlineMedium)
-                        }
+                        LibraryScreen(
+                            viewModel = libraryViewModel,
+                            onNavigateToDetail = { id, type, baseUrl ->
+                                navigate(DesktopScreen.Detail(id.toString(), type.toApiString(), baseUrl ?: ""))
+                            }
+                        )
                     }
                     is DesktopScreen.Addons -> {
                         AddonManagerScreen(
