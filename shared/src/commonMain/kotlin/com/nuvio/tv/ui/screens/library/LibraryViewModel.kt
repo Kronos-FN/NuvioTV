@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.library
 
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.LibraryTypeTab
 import com.nuvio.tv.domain.repository.LibraryRepository
 import kotlinx.coroutines.CoroutineScope
@@ -52,11 +53,11 @@ class LibraryViewModel(
         coroutineScope.launch {
             libraryRepository.getCustomLists().collect { customLists ->
                 _uiState.update { state ->
-                    val baseListsexisted = listOf(
+                    val baseListsExisted = listOf(
                         LibraryListTab.WATCHLIST,
                         LibraryListTab.COLLECTION
                     )
-                    state.copy(availableLists = baseListsexisted + customLists)
+                    state.copy(availableLists = baseListsExisted + customLists)
                 }
             }
         }

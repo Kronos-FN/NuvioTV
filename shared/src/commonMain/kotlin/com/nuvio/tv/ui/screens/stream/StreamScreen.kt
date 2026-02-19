@@ -26,6 +26,7 @@ import com.nuvio.tv.ui.components.EmptyScreenState
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.NetworkImage
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StreamScreen(
     viewModel: StreamScreenViewModel,
@@ -75,16 +76,12 @@ fun StreamScreen(
                 }
                 uiState.error != null -> {
                     EmptyScreenState(
-                        message = uiState.error ?: "Failed to load streams",
-                        actionLabel = "Retry",
-                        onActionClick = { viewModel.onEvent(StreamScreenEvent.OnRetry) }
+                        title = uiState.error ?: "Failed to load streams"
                     )
                 }
                 uiState.filteredStreams.isEmpty() -> {
                     EmptyScreenState(
-                        message = "No streams found",
-                        actionLabel = "Retry",
-                        onActionClick = { viewModel.onEvent(StreamScreenEvent.OnRetry) }
+                        title = "No streams found"
                     )
                 }
                 else -> {

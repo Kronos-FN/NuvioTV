@@ -146,7 +146,7 @@ private fun TraktAwaitingApprovalState(
                 Text(
                     text = deviceCode.verificationUrl,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = NuvioColors.Accent,
+                    color = NuvioColors.Secondary,
                     fontWeight = FontWeight.Bold
                 )
                 
@@ -163,7 +163,7 @@ private fun TraktAwaitingApprovalState(
         
         if (isPolling) {
             androidx.compose.material3.CircularProgressIndicator(
-                color = NuvioColors.Accent
+                color = NuvioColors.Secondary
             )
             Text(
                 text = "Waiting for authorization...",
@@ -206,7 +206,7 @@ private fun TraktConnectedState(
                 Text(
                     text = "Connected",
                     style = MaterialTheme.typography.titleLarge,
-                    color = NuvioColors.Accent
+                    color = NuvioColors.Secondary
                 )
                 
                 if (userProfile != null) {

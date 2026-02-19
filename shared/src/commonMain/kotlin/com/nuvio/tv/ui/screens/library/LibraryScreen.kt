@@ -145,9 +145,7 @@ fun LibraryScreen(
             uiState.error != null -> {
                 EmptyScreenState(
                     title = "Error",
-                    message = uiState.error ?: "Unknown error",
-                    actionText = "Retry",
-                    onActionClick = { viewModel.handleEvent(LibraryEvent.OnRetry) }
+                    subtitle = uiState.error ?: "Unknown error"
                 )
             }
             uiState.visibleItems.isEmpty() -> {
@@ -157,7 +155,7 @@ fun LibraryScreen(
                 }
                 EmptyScreenState(
                     title = "Empty Library",
-                    message = emptyMessage
+                    subtitle = emptyMessage
                 )
             }
             else -> {
