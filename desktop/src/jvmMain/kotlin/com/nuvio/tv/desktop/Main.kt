@@ -78,12 +78,6 @@ fun MainContent(
     val navigationController = remember { DesktopNavigationController() }
     val mediaPlayer = remember { DesktopMediaPlayer() }
     
-    // Track ViewModels for detail and stream screens
-    var metaDetailsViewModel by remember { mutableStateOf<MetaDetailsViewModel?>(null) }
-    var streamScreenViewModel by remember { mutableStateOf<StreamScreenViewModel?>(null) }
-    var currentStreamUrl by remember { mutableStateOf<String?>(null) }
-    var currentPlayerTitle by remember { mutableStateOf<String?>(null) }
-    
     Row(modifier = Modifier.fillMaxSize()) {
         // Sidebar navigation
         val currentScreen = remember { 
@@ -166,7 +160,6 @@ fun MainContent(
                                     navigate(DesktopScreen.Stream(videoId, contentType, title, season, episode))
                                 }
                                 it.onNavigateBack = { navigateBack() }
-                                metaDetailsViewModel = it
                             }
                         }
                         
@@ -185,13 +178,10 @@ fun MainContent(
                                 episode = screen.episode
                             ).also {
                                 it.onNavigateToPlayer = { streamUrl, title, headers ->
-                                    currentStreamUrl = streamUrl
-                                    currentPlayerTitle = title
                                     mediaPlayer.play(streamUrl)
                                     navigate(DesktopScreen.Player(streamUrl, title, headers))
                                 }
                                 it.onNavigateBack = { navigateBack() }
-                                streamScreenViewModel = it
                             }
                         }
                         
