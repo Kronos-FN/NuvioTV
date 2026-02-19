@@ -1,5 +1,8 @@
 package com.nuvio.tv.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 enum class PosterShape {
     POSTER,
     LANDSCAPE,
