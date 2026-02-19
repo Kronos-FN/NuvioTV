@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
@@ -46,6 +47,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.Collections
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 @HiltViewModel
@@ -66,10 +74,13 @@ class HomeViewModel @Inject constructor(
         private const val MAX_RECENT_PROGRESS_ITEMS = 300
         private const val MAX_NEXT_UP_LOOKUPS = 24
         private const val MAX_NEXT_UP_CONCURRENCY = 4
+        private const val MAX_CATALOG_LOAD_CONCURRENCY = 4
     }
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val _fullCatalogRows = MutableStateFlow<List<CatalogRow>>(emptyList())
+    val fullCatalogRows: StateFlow<List<CatalogRow>> = _fullCatalogRows.asStateFlow()
 
     private val _focusState = MutableStateFlow(HomeScreenFocusState())
     val focusState: StateFlow<HomeScreenFocusState> = _focusState.asStateFlow()
@@ -88,9 +99,13 @@ class HomeViewModel @Inject constructor(
     private var currentHeroCatalogKeys: List<String> = emptyList()
     private var catalogUpdateJob: Job? = null
     private var hasRenderedFirstCatalog = false
-    private val catalogLoadSemaphore = Semaphore(6)
+    private val catalogLoadSemaphore = Semaphore(MAX_CATALOG_LOAD_CONCURRENCY)
     private var pendingCatalogLoads = 0
-    private val truncatedItemsCache = mutableMapOf<String, List<MetaPreview>>()
+    private data class TruncatedRowCacheEntry(
+        val sourceRow: CatalogRow,
+        val truncatedRow: CatalogRow
+    )
+    private val truncatedRowCache = mutableMapOf<String, TruncatedRowCacheEntry>()
     private val trailerPreviewLoadingIds = mutableSetOf<String>()
     private val trailerPreviewNegativeCache = mutableSetOf<String>()
     private val trailerPreviewUrlsState = mutableStateMapOf<String, String>()
@@ -99,12 +114,16 @@ class HomeViewModel @Inject constructor(
     private var currentTmdbSettings: TmdbSettings = TmdbSettings()
     private var lastHeroEnrichmentSignature: String? = null
     private var lastHeroEnrichedItems: List<MetaPreview> = emptyList()
-    private val dismissedNextUpKeys = MutableStateFlow<Set<String>>(emptySet())
+    private val prefetchedExternalMetaIds = Collections.synchronizedSet(mutableSetOf<String>())
+    private val externalMetaPrefetchInFlightIds = Collections.synchronizedSet(mutableSetOf<String>())
+    @Volatile
+    private var externalMetaPrefetchEnabled: Boolean = false
     val trailerPreviewUrls: Map<String, String>
         get() = trailerPreviewUrlsState
 
     init {
         observeLayoutPreferences()
+        observeExternalMetaPrefetchPreference()
         loadHomeCatalogOrderPreference()
         loadDisabledHomeCatalogPreference()
         observeTmdbSettings()
@@ -203,6 +222,19 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    private fun observeExternalMetaPrefetchPreference() {
+        viewModelScope.launch {
+            layoutPreferenceDataStore.preferExternalMetaAddonDetail
+                .distinctUntilChanged()
+                .collectLatest { enabled ->
+                    externalMetaPrefetchEnabled = enabled
+                    if (!enabled) {
+                        externalMetaPrefetchInFlightIds.clear()
+                    }
+                }
+        }
+    }
+
     private data class CoreLayoutPrefs(
         val layout: HomeLayout,
         val heroCatalogKeys: List<String>,
@@ -276,42 +308,57 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onItemFocus(item: MetaPreview) {
-        viewModelScope.launch {
-            val prefetchEnabled = layoutPreferenceDataStore.preferExternalMetaAddonDetail.first()
-            if (prefetchEnabled) {
-                // Fetch meta from external addons
-                metaRepository.getMetaFromAllAddons(item.apiType, item.id)
+        if (!externalMetaPrefetchEnabled) return
+        if (item.id in prefetchedExternalMetaIds) return
+        if (!externalMetaPrefetchInFlightIds.add(item.id)) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val result = metaRepository.getMetaFromAllAddons(item.apiType, item.id)
                     .first { it is NetworkResult.Success || it is NetworkResult.Error }
-                    .let { result ->
-                        if (result is NetworkResult.Success) {
-                            // Update the item in catalog rows
-                            updateCatalogItemWithMeta(item.id, result.data)
-                        }
-                    }
+
+                if (result is NetworkResult.Success) {
+                    prefetchedExternalMetaIds.add(item.id)
+                    updateCatalogItemWithMeta(item.id, result.data)
+                }
+            } finally {
+                externalMetaPrefetchInFlightIds.remove(item.id)
             }
         }
     }
 
     private fun updateCatalogItemWithMeta(itemId: String, meta: Meta) {
         _uiState.update { state ->
+            var changed = false
             val updatedRows = state.catalogRows.map { row ->
-                val updatedItems = row.items.map { item ->
-                    if (item.id == itemId) {
-                        item.copy(
-                            background = meta.background ?: item.background,
-                            logo = meta.logo ?: item.logo,
-                            description = meta.description ?: item.description,
-                            releaseInfo = meta.releaseInfo ?: item.releaseInfo,
-                            imdbRating = meta.imdbRating ?: item.imdbRating,
-                            genres = if (meta.genres.isNotEmpty()) meta.genres else item.genres
-                        )
-                    } else item
+                val itemIndex = row.items.indexOfFirst { it.id == itemId }
+                if (itemIndex < 0) {
+                    row
+                } else {
+                    val currentItem = row.items[itemIndex]
+                    val mergedItem = currentItem.copy(
+                        background = meta.background ?: currentItem.background,
+                        logo = meta.logo ?: currentItem.logo,
+                        description = meta.description ?: currentItem.description,
+                        releaseInfo = meta.releaseInfo ?: currentItem.releaseInfo,
+                        imdbRating = meta.imdbRating ?: currentItem.imdbRating,
+                        genres = if (meta.genres.isNotEmpty()) meta.genres else currentItem.genres
+                    )
+                    if (mergedItem == currentItem) {
+                        row
+                    } else {
+                        changed = true
+                        val mutableItems = row.items.toMutableList()
+                        mutableItems[itemIndex] = mergedItem
+                        row.copy(items = mutableItems)
+                    }
                 }
-                if (updatedItems != row.items) {
-                    row.copy(items = updatedItems)
-                } else row
             }
-            state.copy(catalogRows = updatedRows)
+            if (changed) {
+                state.copy(catalogRows = updatedRows)
+            } else {
+                state
+            }
         }
     }
 
@@ -370,7 +417,7 @@ class HomeViewModel @Inject constructor(
             combine(
                 watchProgressRepository.allProgress,
                 traktSettingsDataStore.continueWatchingDaysCap,
-                dismissedNextUpKeys
+                traktSettingsDataStore.dismissedNextUpKeys
             ) { items, daysCap, dismissedNextUp ->
                 Triple(items, daysCap, dismissedNextUp)
             }.collectLatest { (items, daysCap, dismissedNextUp) ->
@@ -417,19 +464,25 @@ class HomeViewModel @Inject constructor(
         inProgressItems: List<ContinueWatchingItem.InProgress>,
         dismissedNextUp: Set<String>
     ) = coroutineScope {
-        val inProgressIds = inProgressItems.map { it.progress.contentId }.toSet()
-
         val latestCompletedBySeries = allProgress
             .filter { progress ->
                 isSeriesType(progress.contentType) &&
                     progress.season != null &&
                     progress.episode != null &&
                     progress.season != 0 &&
-                    progress.isCompleted()
+                    progress.isCompleted() &&
+                    progress.source != WatchProgress.SOURCE_TRAKT_PLAYBACK
             }
             .groupBy { it.contentId }
-            .mapNotNull { (_, items) -> items.maxByOrNull { it.lastWatched } }
-            .filter { it.contentId !in inProgressIds }
+            .mapNotNull { (_, items) ->
+                items.maxWithOrNull(
+                    compareBy<WatchProgress>(
+                        { it.season ?: -1 },
+                        { it.episode ?: -1 },
+                        { it.lastWatched }
+                    )
+                )
+            }
             .filter { progress -> nextUpDismissKey(progress.contentId) !in dismissedNextUp }
             .sortedByDescending { it.lastWatched }
             .take(MAX_NEXT_UP_LOOKUPS)
@@ -441,22 +494,42 @@ class HomeViewModel @Inject constructor(
         val lookupSemaphore = Semaphore(MAX_NEXT_UP_CONCURRENCY)
         val mergeMutex = Mutex()
         val nextUpByContent = linkedMapOf<String, ContinueWatchingItem.NextUp>()
+        var lastEmittedNextUpCount = 0
 
-        latestCompletedBySeries.forEach { progress ->
+        val jobs = latestCompletedBySeries.map { progress ->
             launch(Dispatchers.IO) {
                 lookupSemaphore.withPermit {
                     val nextUp = buildNextUpItem(progress) ?: return@withPermit
                     mergeMutex.withLock {
                         nextUpByContent[progress.contentId] = nextUp
-                        _uiState.update {
-                            it.copy(
-                                continueWatchingItems = mergeContinueWatchingItems(
-                                    inProgressItems = inProgressItems,
-                                    nextUpItems = nextUpByContent.values.toList()
+                        if (nextUpByContent.size - lastEmittedNextUpCount >= 2) {
+                            val nextUpItems = nextUpByContent.values.toList()
+                            _uiState.update {
+                                it.copy(
+                                    continueWatchingItems = mergeContinueWatchingItems(
+                                        inProgressItems = inProgressItems,
+                                        nextUpItems = nextUpItems
+                                    )
                                 )
-                            )
+                            }
+                            lastEmittedNextUpCount = nextUpByContent.size
                         }
                     }
+                }
+            }
+        }
+        jobs.joinAll()
+
+        mergeMutex.withLock {
+            if (nextUpByContent.size != lastEmittedNextUpCount) {
+                val nextUpItems = nextUpByContent.values.toList()
+                _uiState.update {
+                    it.copy(
+                        continueWatchingItems = mergeContinueWatchingItems(
+                            inProgressItems = inProgressItems,
+                            nextUpItems = nextUpItems
+                        )
+                    )
                 }
             }
         }
@@ -466,9 +539,21 @@ class HomeViewModel @Inject constructor(
         inProgressItems: List<ContinueWatchingItem.InProgress>,
         nextUpItems: List<ContinueWatchingItem.NextUp>
     ): List<ContinueWatchingItem> {
+        val inProgressSeriesIds = inProgressItems
+            .asSequence()
+            .map { it.progress }
+            .filter { isSeriesType(it.contentType) }
+            .map { it.contentId }
+            .filter { it.isNotBlank() }
+            .toSet()
+
+        val filteredNextUpItems = nextUpItems.filter { item ->
+            item.info.contentId !in inProgressSeriesIds
+        }
+
         val combined = mutableListOf<Pair<Long, ContinueWatchingItem>>()
         inProgressItems.forEach { combined.add(it.progress.lastWatched to it) }
-        nextUpItems.forEach { combined.add(it.info.lastWatched to it) }
+        filteredNextUpItems.forEach { combined.add(it.info.lastWatched to it) }
 
         return combined
             .sortedByDescending { it.first }
@@ -528,17 +613,63 @@ class HomeViewModel @Inject constructor(
             .filter { it.season != null && it.episode != null && it.season != 0 }
             .sortedWith(compareBy<Video> { it.season }.thenBy { it.episode })
 
-        val currentIndex = episodes.indexOfFirst {
-            it.season == progress.season && it.episode == progress.episode
-        }
+        val currentSeason = progress.season ?: return null
+        val currentEpisode = progress.episode ?: return null
+        val maxEpisodeInSeason = episodes
+            .asSequence()
+            .filter { it.season == currentSeason }
+            .mapNotNull { it.episode }
+            .maxOrNull()
+            ?: return null
 
-        if (currentIndex == -1 || currentIndex + 1 >= episodes.size) return null
+        val isSeasonJump = currentEpisode >= maxEpisodeInSeason
+        val targetSeason = if (isSeasonJump) currentSeason + 1 else currentSeason
+        val targetEpisode = if (isSeasonJump) 1 else currentEpisode + 1
 
-        return meta to episodes[currentIndex + 1]
+        val nextEpisode = episodes.firstOrNull {
+            it.season == targetSeason && it.episode == targetEpisode
+        } ?: return null
+
+        if (!shouldIncludeNextUpEpisode(nextEpisode, isSeasonJump)) return null
+
+        return meta to nextEpisode
     }
 
     private fun isSeriesType(type: String?): Boolean {
         return type == "series" || type == "tv"
+    }
+
+    private fun shouldIncludeNextUpEpisode(
+        nextEpisode: Video,
+        isSeasonJump: Boolean
+    ): Boolean {
+        val releaseDate = parseEpisodeReleaseDate(nextEpisode.released)
+            ?: return !isSeasonJump
+        val todayUtc = LocalDate.now(ZoneOffset.UTC)
+        if (!releaseDate.isAfter(todayUtc)) return true
+        if (!isSeasonJump) return true
+
+        val daysUntilRelease = ChronoUnit.DAYS.between(todayUtc, releaseDate)
+        return daysUntilRelease <= 7
+    }
+
+    private fun parseEpisodeReleaseDate(raw: String?): LocalDate? {
+        if (raw.isNullOrBlank()) return null
+        val value = raw.trim()
+
+        return runCatching {
+            Instant.parse(value).atOffset(ZoneOffset.UTC).toLocalDate()
+        }.getOrNull() ?: runCatching {
+            OffsetDateTime.parse(value).toLocalDate()
+        }.getOrNull() ?: runCatching {
+            LocalDateTime.parse(value).toLocalDate()
+        }.getOrNull() ?: runCatching {
+            LocalDate.parse(value)
+        }.getOrNull() ?: runCatching {
+            val datePortion = Regex("\\b\\d{4}-\\d{2}-\\d{2}\\b").find(value)?.value
+                ?: return@runCatching null
+            LocalDate.parse(datePortion)
+        }.getOrNull()
     }
 
     private fun removeContinueWatching(
@@ -549,7 +680,6 @@ class HomeViewModel @Inject constructor(
     ) {
         if (isNextUp) {
             val dismissKey = nextUpDismissKey(contentId)
-            dismissedNextUpKeys.update { it + dismissKey }
             _uiState.update { state ->
                 state.copy(
                     continueWatchingItems = state.continueWatchingItems.filterNot { item ->
@@ -560,6 +690,9 @@ class HomeViewModel @Inject constructor(
                         }
                     }
                 )
+            }
+            viewModelScope.launch {
+                traktSettingsDataStore.addDismissedNextUpKey(dismissKey)
             }
             return
         }
@@ -592,13 +725,16 @@ class HomeViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null, installedAddonsCount = addons.size) }
         catalogOrder.clear()
         catalogsMap.clear()
-        truncatedItemsCache.clear()
+        _fullCatalogRows.value = emptyList()
+        truncatedRowCache.clear()
         hasRenderedFirstCatalog = false
         trailerPreviewLoadingIds.clear()
         trailerPreviewNegativeCache.clear()
         trailerPreviewUrlsState.clear()
         activeTrailerPreviewItemId = null
         trailerPreviewRequestVersion = 0L
+        prefetchedExternalMetaIds.clear()
+        externalMetaPrefetchInFlightIds.clear()
         lastHeroEnrichmentSignature = null
         lastHeroEnrichedItems = emptyList()
 
@@ -740,8 +876,8 @@ class HomeViewModel @Inject constructor(
                 return@launch
             }
             val debounceMs = when {
-                pendingCatalogLoads > 5 -> 300L
-                pendingCatalogLoads > 0 -> 150L
+                pendingCatalogLoads > 5 -> 450L
+                pendingCatalogLoads > 0 -> 250L
                 else -> 100L
             }
             delay(debounceMs)
@@ -798,15 +934,20 @@ class HomeViewModel @Inject constructor(
             val computedDisplayRows = orderedRows.map { row ->
                 if (row.items.size > 25) {
                     val key = "${row.addonId}_${row.apiType}_${row.catalogId}"
-                    val cached = truncatedItemsCache[key]
-                    if (cached != null && cached.size == 25 && row.items.take(25) == cached) {
-                        row.copy(items = cached)
+                    val cachedEntry = truncatedRowCache[key]
+                    if (cachedEntry != null && cachedEntry.sourceRow === row) {
+                        cachedEntry.truncatedRow
                     } else {
-                        val truncated = row.items.take(25)
-                        truncatedItemsCache[key] = truncated
-                        row.copy(items = truncated)
+                        val truncatedRow = row.copy(items = row.items.take(25))
+                        truncatedRowCache[key] = TruncatedRowCacheEntry(
+                            sourceRow = row,
+                            truncatedRow = truncatedRow
+                        )
+                        truncatedRow
                     }
                 } else {
+                    val key = "${row.addonId}_${row.apiType}_${row.catalogId}"
+                    truncatedRowCache.remove(key)
                     row
                 }
             }
@@ -858,6 +999,9 @@ class HomeViewModel @Inject constructor(
 
         // Full (untruncated) rows for CatalogSeeAllScreen
         val fullRows = orderedKeys.mapNotNull { key -> catalogSnapshot[key] }
+        _fullCatalogRows.update { rows ->
+            if (rows == fullRows) rows else fullRows
+        }
 
         val tmdbSettings = currentTmdbSettings
         val shouldUseEnrichedHeroItems = tmdbSettings.enabled &&
@@ -889,7 +1033,6 @@ class HomeViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 catalogRows = if (state.catalogRows == displayRows) state.catalogRows else displayRows,
-                fullCatalogRows = if (state.fullCatalogRows == fullRows) state.fullCatalogRows else fullRows,
                 heroItems = if (state.heroItems == resolvedHeroItems) state.heroItems else resolvedHeroItems,
                 gridItems = if (state.gridItems == nextGridItems) state.gridItems else nextGridItems,
                 isLoading = false

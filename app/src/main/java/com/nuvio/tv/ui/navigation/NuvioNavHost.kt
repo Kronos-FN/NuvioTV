@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.navigation
 
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
@@ -38,13 +40,65 @@ fun NuvioNavHost(
     startDestination: String = Screen.Home.route,
     hideBuiltInHeaders: Boolean = false
 ) {
+    fun isStreamToPlayer(from: String, to: String): Boolean {
+        return from.startsWith("stream/") && to.startsWith("player/")
+    }
+
+    fun isPlayerToStream(from: String, to: String): Boolean {
+        return from.startsWith("player/") && to.startsWith("stream/")
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        enterTransition = { fadeIn(animationSpec = tween(150)) },
-        exitTransition = { fadeOut(animationSpec = tween(150)) },
-        popEnterTransition = { fadeIn(animationSpec = tween(150)) },
-        popExitTransition = { fadeOut(animationSpec = tween(150)) }
+        enterTransition = {
+            val from = initialState.destination.route.orEmpty()
+            val to = targetState.destination.route.orEmpty()
+            val isAutoPlayNav = targetState.arguments
+                ?.getString("autoPlayNav")
+                ?.toBooleanStrictOrNull() == true
+            if (isStreamToPlayer(from, to) && isAutoPlayNav) {
+                EnterTransition.None
+            } else {
+                fadeIn(animationSpec = tween(150))
+            }
+        },
+        exitTransition = {
+            val from = initialState.destination.route.orEmpty()
+            val to = targetState.destination.route.orEmpty()
+            val isAutoPlayNav = targetState.arguments
+                ?.getString("autoPlayNav")
+                ?.toBooleanStrictOrNull() == true
+            if (isStreamToPlayer(from, to) && isAutoPlayNav) {
+                ExitTransition.None
+            } else {
+                fadeOut(animationSpec = tween(150))
+            }
+        },
+        popEnterTransition = {
+            val from = initialState.destination.route.orEmpty()
+            val to = targetState.destination.route.orEmpty()
+            val isAutoPlayNav = initialState.arguments
+                ?.getString("autoPlayNav")
+                ?.toBooleanStrictOrNull() == true
+            if (isPlayerToStream(from, to) && isAutoPlayNav) {
+                EnterTransition.None
+            } else {
+                fadeIn(animationSpec = tween(150))
+            }
+        },
+        popExitTransition = {
+            val from = initialState.destination.route.orEmpty()
+            val to = targetState.destination.route.orEmpty()
+            val isAutoPlayNav = initialState.arguments
+                ?.getString("autoPlayNav")
+                ?.toBooleanStrictOrNull() == true
+            if (isPlayerToStream(from, to) && isAutoPlayNav) {
+                ExitTransition.None
+            } else {
+                fadeOut(animationSpec = tween(150))
+            }
+        }
     ) {
         composable(Screen.LayoutSelection.route) {
             LayoutSelectionScreen(
@@ -120,6 +174,9 @@ fun NuvioNavHost(
                 onBackPress = { navController.popBackStack() },
                 onNavigateToCastDetail = { personId, personName, preferCrew ->
                     navController.navigate(Screen.CastDetail.createRoute(personId, personName, preferCrew))
+                },
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
                 },
                 onPlayClick = { videoId, contentType, contentId, title, poster, backdrop, logo, season, episode, episodeName, genres, year, runtime ->
                     navController.navigate(
@@ -204,6 +261,11 @@ fun NuvioNavHost(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
+                },
+                navArgument("manualSelection") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = "false"
                 }
             )
         ) {
@@ -229,7 +291,8 @@ fun NuvioNavHost(
                                 episode = playbackInfo.episode,
                                 episodeTitle = playbackInfo.episodeTitle,
                                 rememberedAudioLanguage = playbackInfo.rememberedAudioLanguage,
-                                rememberedAudioName = playbackInfo.rememberedAudioName
+                                rememberedAudioName = playbackInfo.rememberedAudioName,
+                                autoPlayNav = false
                             )
                         )
                     }
@@ -254,7 +317,8 @@ fun NuvioNavHost(
                                 episode = playbackInfo.episode,
                                 episodeTitle = playbackInfo.episodeTitle,
                                 rememberedAudioLanguage = playbackInfo.rememberedAudioLanguage,
-                                rememberedAudioName = playbackInfo.rememberedAudioName
+                                rememberedAudioName = playbackInfo.rememberedAudioName,
+                                autoPlayNav = true
                             )
                         ) {
                             popUpTo(Screen.Stream.route) { inclusive = true }
@@ -343,14 +407,55 @@ fun NuvioNavHost(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
+                },
+                navArgument("autoPlayNav") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = "false"
                 }
             )
-        ) {
+        ) { backStackEntry ->
             PlayerScreen(
                 onBackPress = {
                     val returnedToStream = navController.popBackStack(Screen.Stream.route, inclusive = false)
                     if (!returnedToStream) {
                         navController.popBackStack()
+                    }
+                },
+                onPlaybackErrorBack = {
+                    val returnedToStream = navController.popBackStack(Screen.Stream.route, inclusive = false)
+                    if (!returnedToStream) {
+                        val args = backStackEntry.arguments
+                        val videoId = args?.getString("videoId").orEmpty()
+                        val contentType = args?.getString("contentType").orEmpty()
+                        val title = args?.getString("title").orEmpty()
+
+                        if (videoId.isBlank() || contentType.isBlank() || title.isBlank()) {
+                            navController.popBackStack()
+                        } else {
+                            val route = Screen.Stream.createRoute(
+                                videoId = videoId,
+                                contentType = contentType,
+                                title = title,
+                                poster = args?.getString("poster"),
+                                backdrop = args?.getString("backdrop"),
+                                logo = args?.getString("logo"),
+                                season = args?.getString("season")?.toIntOrNull(),
+                                episode = args?.getString("episode")?.toIntOrNull(),
+                                episodeName = args?.getString("episodeTitle"),
+                                genres = null,
+                                year = args?.getString("year"),
+                                contentId = args?.getString("contentId"),
+                                contentName = args?.getString("contentName"),
+                                runtime = null,
+                                manualSelection = true
+                            )
+
+                            navController.navigate(route) {
+                                popUpTo(Screen.Player.route) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
                     }
                 }
             )
